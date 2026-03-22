@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ytSearch, ytVideoDetails } from '../api'
+import { ytSearch } from '../api'
 import { getVideoId } from '../utils'
 import { VideoCard } from './VideoCard'
 
@@ -7,7 +7,6 @@ export function VideoGrid({ query, order, count = 4, cols = 4, onOpen }) {
   const [items, setItems] = useState([])
   const [status, setStatus] = useState('loading')
 
-  // Stable key prevents re-fetching when parent re-renders with same props
   const fetchKey = useMemo(() => `${query}|${order}|${count}`, [query, order, count])
 
   useEffect(() => {
@@ -19,15 +18,8 @@ export function VideoGrid({ query, order, count = 4, cols = 4, onOpen }) {
         const data = await ytSearch(query, order)
         if (cancelled) return
         if (!data.items?.length) { setStatus('empty'); return }
-        const slice = data.items.slice(0, count)
-        const ids   = slice.map(getVideoId).filter(Boolean)
-        const detail = await ytVideoDetails(ids)
-        if (cancelled) return
-        const map = Object.fromEntries((detail.items ?? []).map(d => [d.id, d]))
-        setItems(slice.map(it => {
-          const d = map[getVideoId(it)]
-          return d ? { ...it, statistics: d.statistics } : it
-        }))
+        // Use search result data directly — no second details fetch needed
+        setItems(data.items.slice(0, count))
         setStatus('ok')
       } catch (err) {
         if (!cancelled) setStatus('error:' + err.message)

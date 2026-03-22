@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ytSearch, ytVideoDetails } from '../api'
+import { ytSearch } from '../api'
 import { getVideoId, fmtCount } from '../utils'
 import { ResultRow } from './VideoCard'
 
@@ -19,13 +19,8 @@ export function SearchPage({ query, onOpen }) {
     try {
       const data = await ytSearch(query, sort, pageToken)
       if (!data.items?.length) { setStatus('empty'); return }
-      const ids    = data.items.map(getVideoId).filter(Boolean)
-      const detail = await ytVideoDetails(ids)
-      const map    = Object.fromEntries((detail.items ?? []).map(d => [d.id, d]))
-      setItems(data.items.map(it => {
-        const d = map[getVideoId(it)]
-        return d ? { ...it, statistics: d.statistics } : { ...it, _unavailable: true }
-      }))
+      // Use search result data directly — no second details fetch needed
+      setItems(data.items)
       const total = data.pageInfo?.totalResults
       setTotal(total ? `~${fmtCount(total)} results (2005–2009)` : '')
       setNextToken(data.nextPageToken ?? null)
