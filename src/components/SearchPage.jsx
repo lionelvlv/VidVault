@@ -71,9 +71,9 @@ export function SearchPage({ query, onOpen }) {
 
       {status === 'ok' && (
         <div className="pagination">
-          {page > 1    && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
+          {page > 1  && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
           <button className="page-btn active">Page {page}</button>
-          {nextToken   && <button className="page-btn" onClick={goNext}>Next ▶</button>}
+          {nextToken && <button className="page-btn" onClick={goNext}>Next ▶</button>}
         </div>
       )}
     </div>
