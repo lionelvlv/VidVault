@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react'
-import { ytSearch } from '../api'
 import { getVideoId } from '../utils'
 
 const CATS = [
@@ -22,73 +21,80 @@ const TAGS = [
   ['dance 2006','dance'], ['machinima 2007','machinima'], ['flash animation 2006','flash'],
 ]
 
-// Fixed cacheable queries — shuffled per session for variety.
-// Each query costs 1 API call but yields ~12 videos served for free after that.
-const RANDOM_QUERIES = [
-  ['funny home video 2006',   'date'],
-  ['viral video 2007',        'relevance'],
-  ['music video 2006',        'relevance'],
-  ['vlog 2007',               'date'],
-  ['prank 2006',              'date'],
-  ['skateboard fail 2007',    'relevance'],
-  ['flash animation 2006',    'relevance'],
-  ['gaming 2007',             'date'],
-  ['cute animals 2006',       'relevance'],
-  ['dance video 2007',        'date'],
-  ['comedy skit 2007',        'relevance'],
-  ['school project 2006',     'date'],
-  ['sports highlight 2007',   'relevance'],
-  ['talent show 2006',        'date'],
-  ['magic trick 2007',        'relevance'],
-  ['cooking tutorial 2006',   'date'],
-  ['news clip 2006',          'relevance'],
-  ['anime amv 2007',          'date'],
-  ['original video 2005',     'date'],
-  ['concert recording 2007',  'relevance'],
-].sort(() => Math.random() - 0.5)
+// 5 broad queries that together cover the whole era well.
+// Fetched once, cached for 7 days → ~60 videos in the pool.
+// Randomness comes from which video is picked, not which query is used.
+const POOL_QUERIES = [
+  { q: 'video 2006',  order: 'date'      },
+  { q: 'video 2007',  order: 'date'      },
+  { q: 'funny 2006',  order: 'relevance' },
+  { q: 'music 2007',  order: 'relevance' },
+  { q: 'vlog 2008',   order: 'date'      },
+]
 
-let _queryIdx = 0
+const POOL_KEY = 'vv2_random_pool'
+const POOL_TTL = 7 * 24 * 60 * 60 * 1000  // 7 days — these results barely change
+
+function loadPoolFromStorage() {
+  try {
+    const raw = localStorage.getItem(POOL_KEY)
+    if (!raw) return null
+    const { items, ts } = JSON.parse(raw)
+    if (Date.now() - ts > POOL_TTL) { localStorage.removeItem(POOL_KEY); return null }
+    return items
+  } catch { return null }
+}
+
+function savePoolToStorage(items) {
+  try { localStorage.setItem(POOL_KEY, JSON.stringify({ items, ts: Date.now() })) } catch {}
+}
+
+async function buildPool() {
+  // Check localStorage first — may already be warm from a previous session
+  const stored = loadPoolFromStorage()
+  if (stored?.length > 10) return stored
+
+  // Fetch all 5 queries in parallel — 5 API calls total, never repeated for 7 days
+  console.log('[VidVault] Building random pool (5 fetches, once per 7 days)…')
+  const results = await Promise.all(
+    POOL_QUERIES.map(({ q, order }) =>
+      fetch(`/api/search?q=${encodeURIComponent(q)}&order=${order}`)
+        .then(r => r.json())
+        .catch(() => ({ items: [] }))
+    )
+  )
+  const items = results.flatMap(d => d.items ?? [])
+  savePoolToStorage(items)
+  return items
+}
+
+// Module-level so pool persists for the whole session without re-fetching
+let _poolPromise = null
+function getPool() {
+  if (!_poolPromise) _poolPromise = buildPool()
+  return _poolPromise
+}
 
 export function Sidebar({ onSearch, onOpen }) {
-  const [loading, setLoading] = useState(false)
-  const seenIds   = useRef(new Set())
-  const localPool = useRef([])  // leftover videos from last fetch, served for free
+  const [loading, setLoading]   = useState(false)
+  const seenIds = useRef(new Set())
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      // Drain local pool first — zero API cost
-      const unseen = localPool.current.filter(
-        item => !seenIds.current.has(getVideoId(item))
-      )
+      const pool   = await getPool()
+      const unseen = pool.filter(item => !seenIds.current.has(getVideoId(item)))
 
-      if (unseen.length > 0) {
-        const item = unseen[Math.floor(Math.random() * unseen.length)]
-        const id   = getVideoId(item)
+      // If we've seen everything, reset and start over
+      const candidates = unseen.length > 0 ? unseen : pool
+      const item = candidates[Math.floor(Math.random() * candidates.length)]
+      const id   = getVideoId(item)
+
+      if (id) {
         seenIds.current.add(id)
-        localPool.current = localPool.current.filter(i => getVideoId(i) !== id)
         onOpen(id, item)
-        setLoading(false)
-        return
       }
-
-      // Pool empty — exactly 1 API call, stash the rest for future free clicks
-      const [q, order] = RANDOM_QUERIES[_queryIdx % RANDOM_QUERIES.length]
-      _queryIdx++
-
-      const data  = await ytSearch(q, order)
-      const items = (data.items ?? [])
-        .filter(item => !seenIds.current.has(getVideoId(item)))
-        .sort(() => Math.random() - 0.5)
-
-      if (!items.length) { setLoading(false); return }
-
-      const [first, ...rest] = items
-      const id = getVideoId(first)
-      seenIds.current.add(id)
-      localPool.current = rest   // up to 11 free future clicks from this 1 call
-      onOpen(id, first)
     } catch {}
     setLoading(false)
   }

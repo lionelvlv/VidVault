@@ -1,5 +1,5 @@
 // ── Cache TTLs ────────────────────────────────────────────────────────────────
-const TTL_SEARCH = 24 * 60 * 60 * 1000   // 24 h  — search results
+const TTL_SEARCH = 7 * 24 * 60 * 60 * 1000  // 7 days — era-locked results never change
 const TTL_VIDEO  = 7  * 24 * 60 * 60 * 1000 // 7 days — video details (static data)
 const LS_PREFIX  = 'vv2_'
 
