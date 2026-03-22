@@ -1,63 +1,67 @@
-// api/search.js — proxies to Invidious (no YouTube API key needed)
-// Falls back through multiple instances if one fails
-
-const ERA_START = 631152000   // 2005-01-01 unix
-const ERA_END   = 1262303999  // 2009-12-31 unix
-
-// Official instances from docs.invidious.io/instances — ordered by reliability
+// api/search.js — Vercel serverless proxy to Piped API
+// Piped is designed for programmatic API use, unlike Invidious public instances
+ 
+const ERA_START_UNIX = 631152000   // 2005-01-01
+const ERA_END_UNIX   = 1262303999  // 2009-12-31
+ 
+// Official Piped instances with CDN — ordered by reliability
 const INSTANCES = [
-  'https://inv.nadeko.net',
-  'https://yewtu.be',
-  'https://invidious.nerdvpn.de',
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi-libre.kavin.rocks',
+  'https://piped-api.privacy.com.de',
+  'https://api.piped.yt',
 ]
-
+ 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-
+ 
   const { q, order, page } = req.query
   if (!q) return res.status(400).json({ error: 'Missing parameter: q' })
-
+ 
   const params = new URLSearchParams({
     q,
-    type:  'video',
-    sort:  order === 'date' ? 'upload_date' : 'relevance',
-    page:  page || '1',
+    filter: 'videos',
+    // Piped sort: date, views, relevance
+    sort_order: order === 'date' ? 'upload_date' : order === 'viewCount' ? 'views' : 'relevance',
   })
-
-  // Try each instance in order until one works
+  if (page && page !== '1') params.set('nextpage', page)
+ 
   for (const instance of INSTANCES) {
     try {
-      const upstream = await fetch(`${instance}/api/v1/search?${params}`, {
+      const upstream = await fetch(`${instance}/search?${params}`, {
+        headers: { 'User-Agent': 'VidVault/1.0' },
         signal: AbortSignal.timeout(8000),
       })
       if (!upstream.ok) continue
-
-      const raw = await upstream.json()
-
-      // Filter to era and normalize to a consistent shape
+ 
+      const json = await upstream.json()
+      const raw  = json.items ?? []
+ 
+      // Filter to era, normalize to same shape the frontend expects
       const items = raw
-        .filter(v => v.type === 'video' && v.published >= ERA_START && v.published <= ERA_END)
+        .filter(v => v.type === 'stream' && v.uploaded >= ERA_START_UNIX * 1000 && v.uploaded <= ERA_END_UNIX * 1000)
         .map(v => ({
-          id:      { videoId: v.videoId },
+          id:      { videoId: v.url?.replace('/watch?v=', '') ?? '' },
           snippet: {
-            title:        v.title,
-            channelTitle: v.author,
-            publishedAt:  new Date(v.published * 1000).toISOString(),
-            description:  v.description ?? '',
+            title:        v.title ?? '',
+            channelTitle: v.uploaderName ?? '',
+            publishedAt:  new Date(v.uploaded).toISOString(),
+            description:  v.shortDescription ?? '',
             thumbnails: {
-              medium:   { url: v.videoThumbnails?.find(t => t.quality === 'medium')?.url
-                              ?? v.videoThumbnails?.[0]?.url ?? '' },
-              default:  { url: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url ?? '' },
+              medium:  { url: v.thumbnail ?? '' },
+              default: { url: v.thumbnail ?? '' },
             },
           },
           statistics: {
-            viewCount: String(v.viewCount ?? ''),
+            viewCount: String(v.views ?? ''),
           },
         }))
-
+        .filter(v => v.id.videoId)
+ 
       return res.status(200).json({ items, pageInfo: { totalResults: items.length } })
-    } catch { /* try next instance */ }
+    } catch { /* try next */ }
   }
-
-  res.status(502).json({ error: 'All Invidious instances failed' })
+ 
+  res.status(502).json({ error: 'All Piped instances failed — try again later' })
 }
+ 
