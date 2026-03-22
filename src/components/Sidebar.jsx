@@ -24,63 +24,101 @@ const TAGS = [
 
 const YEARS = ['2005', '2006', '2007', '2008', '2009']
 
-// Fallback words if Datamuse is unavailable
-const FALLBACK_WORDS = [
-  'funny', 'dog', 'skateboard', 'magic', 'dance', 'baby', 'cooking', 'trick',
-  'fail', 'cat', 'music', 'prank', 'sports', 'wedding', 'concert', 'school',
-  'science', 'travel', 'birthday', 'surprise', 'talent', 'workout', 'animals',
-]
+// Seeds for Datamuse — fetched once, cached for 7 days
+const DATAMUSE_SEEDS = ['fun','life','people','world','time','happy','action','play',
+                        'music','food','school','sport','travel','home','nature']
+const DATAMUSE_CACHE_KEY = 'vv2_datamuse_words'
+const DATAMUSE_TTL = 7 * 24 * 60 * 60 * 1000
 
-async function getRandomWord() {
+async function getWordPool() {
+  // Return cached pool if fresh
   try {
-    // Datamuse: get words related to a random seed concept — free, no key needed
-    const seeds = ['fun','video','life','people','world','time','happy','real']
-    const seed  = seeds[Math.floor(Math.random() * seeds.length)]
-    const res   = await fetch(`https://api.datamuse.com/words?ml=${seed}&max=500`)
-    if (!res.ok) throw new Error()
-    const words = await res.json()
-    if (!words.length) throw new Error()
-    // Pick a random word from the results
-    const word = words[Math.floor(Math.random() * words.length)]
-    return word.word
-  } catch {
-    return FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)]
+    const raw = localStorage.getItem(DATAMUSE_CACHE_KEY)
+    if (raw) {
+      const { words, ts } = JSON.parse(raw)
+      if (Date.now() - ts < DATAMUSE_TTL && words.length > 50) return words
+    }
+  } catch {}
+
+  // Fetch from Datamuse — pick 3 random seeds and merge results
+  try {
+    const seeds = [...DATAMUSE_SEEDS].sort(() => Math.random() - 0.5).slice(0, 3)
+    const results = await Promise.all(
+      seeds.map(s => fetch(`https://api.datamuse.com/words?ml=${s}&max=500`)
+        .then(r => r.json()).catch(() => []))
+    )
+    const words = [...new Set(results.flat().map(w => w.word).filter(w => w && w.length > 2 && !w.includes(' ')))]
+    if (words.length > 20) {
+      try { localStorage.setItem(DATAMUSE_CACHE_KEY, JSON.stringify({ words, ts: Date.now() })) } catch {}
+      return words
+    }
+  } catch {}
+
+  // Hardcoded fallback
+  return ['funny','dog','skateboard','magic','dance','baby','cooking','trick','fail',
+          'cat','music','prank','sports','wedding','concert','school','science','travel',
+          'birthday','surprise','talent','workout','nature','food','city','family']
+}
+
+// Module-level video pool so it persists across re-renders without a ref
+let _videoPool = []
+let _poolFilling = false
+
+async function fillPool(seenIds) {
+  if (_poolFilling) return
+  _poolFilling = true
+  try {
+    const wordPool = await getWordPool()
+    // Pick 3 random words and fetch their search results in parallel — 3 API calls, ~36 videos
+    const picks = Array.from({ length: 3 }, () => {
+      const word = wordPool[Math.floor(Math.random() * wordPool.length)]
+      const year = YEARS[Math.floor(Math.random() * YEARS.length)]
+      const order = Math.random() > 0.5 ? 'relevance' : 'date'
+      return { word, year, order }
+    })
+    const results = await Promise.all(
+      picks.map(({ word, year, order }) => ytSearch(`${word} ${year}`, order).catch(() => ({ items: [] })))
+    )
+    const newItems = results.flatMap(d => d.items ?? [])
+      .filter(item => {
+        const id = getVideoId(item)
+        return id && !seenIds.has(id)
+      })
+    // Shuffle and add to pool
+    _videoPool.push(...newItems.sort(() => Math.random() - 0.5))
+  } finally {
+    _poolFilling = false
   }
 }
 
 export function Sidebar({ onSearch, onOpen }) {
   const [loading, setLoading] = useState(false)
-  // Track seen video IDs across clicks so we never repeat
   const seenIds = useRef(new Set())
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      const word  = await getRandomWord()
-      const year  = YEARS[Math.floor(Math.random() * YEARS.length)]
-      const query = `${word} ${year}`
-      const order = Math.random() > 0.5 ? 'relevance' : 'date'
-
-      const data = await ytSearch(query, order)
-      if (!data.items?.length) { setLoading(false); return }
-
-      // Filter out videos we've already shown
-      const unseen = data.items.filter(item => {
-        const id = getVideoId(item)
-        return id && !seenIds.current.has(id)
-      })
-
-      // If all results were seen, clear history and try again fresh
-      const pool = unseen.length ? unseen : data.items
-      const item = pool[Math.floor(Math.random() * pool.length)]
-      const id   = getVideoId(item)
-
-      if (id) {
-        seenIds.current.add(id)
-        onOpen(id, item)
+      // If pool is running low, refill in background (or wait if empty)
+      if (_videoPool.length < 5) {
+        await fillPool(seenIds.current)
+      } else if (_videoPool.length < 15) {
+        // Refill in background while we serve from existing pool
+        fillPool(seenIds.current)
       }
-    } catch { /* silently fail */ }
+
+      // Pop from pool
+      if (_videoPool.length > 0) {
+        // Find first item not already seen
+        const idx = _videoPool.findIndex(item => !seenIds.current.has(getVideoId(item)))
+        const item = idx >= 0 ? _videoPool.splice(idx, 1)[0] : _videoPool.shift()
+        const id = getVideoId(item)
+        if (id) {
+          seenIds.current.add(id)
+          onOpen(id, item)
+        }
+      }
+    } catch {}
     setLoading(false)
   }
 
