@@ -23,7 +23,7 @@ const TAGS = [
 
 // 5 broad queries that together cover the whole era well.
 // Fetched once, cached for 7 days → ~60 videos in the pool.
-// Randomness comes from which video is picked, not which query is used.
+// Randomness: pick a random TOPIC first, then a random video from that topic.
 const POOL_QUERIES = [
   { q: 'video 2006',  order: 'date'      },
   { q: 'video 2007',  order: 'date'      },
@@ -39,22 +39,20 @@ function loadPoolFromStorage() {
   try {
     const raw = localStorage.getItem(POOL_KEY)
     if (!raw) return null
-    const { items, ts } = JSON.parse(raw)
+    const { buckets, ts } = JSON.parse(raw)
     if (Date.now() - ts > POOL_TTL) { localStorage.removeItem(POOL_KEY); return null }
-    return items
+    return buckets  // { [query]: [items] }
   } catch { return null }
 }
 
-function savePoolToStorage(items) {
-  try { localStorage.setItem(POOL_KEY, JSON.stringify({ items, ts: Date.now() })) } catch {}
+function savePoolToStorage(buckets) {
+  try { localStorage.setItem(POOL_KEY, JSON.stringify({ buckets, ts: Date.now() })) } catch {}
 }
 
 async function buildPool() {
-  // Check localStorage first — may already be warm from a previous session
   const stored = loadPoolFromStorage()
-  if (stored?.length > 10) return stored
+  if (stored && Object.keys(stored).length > 0) return stored
 
-  // Fetch all 5 queries in parallel — 5 API calls total, never repeated for 7 days
   console.log('[VidVault] Building random pool (5 fetches, once per 7 days)…')
   const results = await Promise.all(
     POOL_QUERIES.map(({ q, order }) =>
@@ -63,9 +61,14 @@ async function buildPool() {
         .catch(() => ({ items: [] }))
     )
   )
-  const items = results.flatMap(d => d.items ?? [])
-  savePoolToStorage(items)
-  return items
+
+  // Store as buckets keyed by query so we can pick topic-first
+  const buckets = {}
+  POOL_QUERIES.forEach(({ q }, i) => {
+    buckets[q] = results[i].items ?? []
+  })
+  savePoolToStorage(buckets)
+  return buckets
 }
 
 // Module-level so pool persists for the whole session without re-fetching
@@ -83,17 +86,36 @@ export function Sidebar({ onSearch, onOpen }) {
     if (loading) return
     setLoading(true)
     try {
-      const pool   = await getPool()
-      const unseen = pool.filter(item => !seenIds.current.has(getVideoId(item)))
+      const buckets = await getPool()
+      const topics  = Object.keys(buckets)
 
-      // If we've seen everything, reset and start over
-      const candidates = unseen.length > 0 ? unseen : pool
-      const item = candidates[Math.floor(Math.random() * candidates.length)]
-      const id   = getVideoId(item)
+      // Pick a random topic, then a random unseen video from it
+      // Shuffle topics so we don't always start with the same one
+      const shuffled = topics.sort(() => Math.random() - 0.5)
 
+      let picked = null
+      for (const topic of shuffled) {
+        const unseen = buckets[topic].filter(
+          item => !seenIds.current.has(getVideoId(item))
+        )
+        if (unseen.length > 0) {
+          picked = unseen[Math.floor(Math.random() * unseen.length)]
+          break
+        }
+      }
+
+      // All videos seen — reset and pick fresh
+      if (!picked) {
+        seenIds.current.clear()
+        const topic = topics[Math.floor(Math.random() * topics.length)]
+        const items = buckets[topic]
+        picked = items[Math.floor(Math.random() * items.length)]
+      }
+
+      const id = getVideoId(picked)
       if (id) {
         seenIds.current.add(id)
-        onOpen(id, item)
+        onOpen(id, picked)
       }
     } catch {}
     setLoading(false)
