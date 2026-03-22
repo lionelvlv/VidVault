@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ytSearch } from '../api'
 import { getVideoId } from '../utils'
 
@@ -22,39 +22,64 @@ const TAGS = [
   ['dance 2006','dance'], ['machinima 2007','machinima'], ['flash animation 2006','flash'],
 ]
 
-// Large pool of era-appropriate queries to draw from randomly
-const RANDOM_POOL = [
-  'funny', 'vlog', 'music video', 'viral', 'prank', 'fail', 'skateboard',
-  'flash animation', 'gaming', 'animals', 'dance', 'news', 'anime', 'comedy',
-  'sports', 'tutorial', 'review', 'trailer', 'reaction', 'parody',
-  'magic trick', 'street performance', 'talent show', 'school project',
-  'home video', 'holiday', 'concert', 'cooking', 'science experiment',
-  'dog', 'cat', 'baby', 'wedding', 'birthday', 'vacation',
+const YEARS = ['2005', '2006', '2007', '2008', '2009']
+
+// Fallback words if Datamuse is unavailable
+const FALLBACK_WORDS = [
+  'funny', 'dog', 'skateboard', 'magic', 'dance', 'baby', 'cooking', 'trick',
+  'fail', 'cat', 'music', 'prank', 'sports', 'wedding', 'concert', 'school',
+  'science', 'travel', 'birthday', 'surprise', 'talent', 'workout', 'animals',
 ]
 
-const YEARS = ['2005', '2006', '2007', '2008', '2009']
+async function getRandomWord() {
+  try {
+    // Datamuse: get words related to a random seed concept — free, no key needed
+    const seeds = ['fun','video','life','people','world','time','happy','real']
+    const seed  = seeds[Math.floor(Math.random() * seeds.length)]
+    const res   = await fetch(`https://api.datamuse.com/words?ml=${seed}&max=500`)
+    if (!res.ok) throw new Error()
+    const words = await res.json()
+    if (!words.length) throw new Error()
+    // Pick a random word from the results
+    const word = words[Math.floor(Math.random() * words.length)]
+    return word.word
+  } catch {
+    return FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)]
+  }
+}
 
 export function Sidebar({ onSearch, onOpen }) {
   const [loading, setLoading] = useState(false)
+  // Track seen video IDs across clicks so we never repeat
+  const seenIds = useRef(new Set())
 
   async function loadRandom() {
+    if (loading) return
     setLoading(true)
     try {
-      // Build a random query from pool + random year
-      const word = RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)]
-      const year = YEARS[Math.floor(Math.random() * YEARS.length)]
+      const word  = await getRandomWord()
+      const year  = YEARS[Math.floor(Math.random() * YEARS.length)]
       const query = `${word} ${year}`
-
-      // Random sort order too
       const order = Math.random() > 0.5 ? 'relevance' : 'date'
-      const data = await ytSearch(query, order)
 
+      const data = await ytSearch(query, order)
       if (!data.items?.length) { setLoading(false); return }
 
-      // Pick a random result from the page (not always the first one)
-      const item = data.items[Math.floor(Math.random() * data.items.length)]
+      // Filter out videos we've already shown
+      const unseen = data.items.filter(item => {
+        const id = getVideoId(item)
+        return id && !seenIds.current.has(id)
+      })
+
+      // If all results were seen, clear history and try again fresh
+      const pool = unseen.length ? unseen : data.items
+      const item = pool[Math.floor(Math.random() * pool.length)]
       const id   = getVideoId(item)
-      if (id) onOpen(id, item)
+
+      if (id) {
+        seenIds.current.add(id)
+        onOpen(id, item)
+      }
     } catch { /* silently fail */ }
     setLoading(false)
   }

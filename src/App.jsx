@@ -4,22 +4,33 @@ import { HomePage } from './components/HomePage'
 import { SearchPage } from './components/SearchPage'
 import { VideoPage } from './components/VideoPage'
 
-// page: 'home' | 'search' | 'video'
 export default function App() {
   const [page, setPage]           = useState('home')
   const [searchQuery, setSearch]  = useState('')
   const [videoId, setVideoId]     = useState(null)
   const [videoItem, setVideoItem] = useState(null)
   const [lastSearch, setLast]     = useState('')
-  const inputRef = useRef(null)
+  const inputRef  = useRef(null)
+  const iframeRef = useRef(null)
+
+  // Stop the iframe from playing when navigating away
+  function stopVideo() {
+    if (iframeRef.current) iframeRef.current.src = ''
+  }
 
   const doSearch = useCallback((q) => {
     const term = q ?? inputRef.current?.value.trim()
     if (!term) return
+    stopVideo()
     if (inputRef.current) inputRef.current.value = term
     setSearch(term)
     setLast(term)
     setPage('search')
+  }, [])
+
+  const goHome = useCallback(() => {
+    stopVideo()
+    setPage('home')
   }, [])
 
   const openVideo = useCallback((id, item) => {
@@ -29,6 +40,7 @@ export default function App() {
   }, [])
 
   function backFromVideo() {
+    stopVideo()
     setPage(lastSearch ? 'search' : 'home')
   }
 
@@ -62,9 +74,9 @@ export default function App() {
 
         <div id="nav-bar">
           <div className={`nav-tab${page === 'home' ? ' active' : ''}`}
-               id="nav-home" onClick={() => setPage('home')}>Home</div>
+               id="nav-home" onClick={goHome}>Home</div>
           <div className={`nav-tab${page === 'search' ? ' active' : ''}`}
-               id="nav-search" onClick={() => inputRef.current?.focus()}>Search</div>
+               id="nav-search" onClick={() => { stopVideo(); inputRef.current?.focus() }}>Search</div>
           {[
             ['Music Videos 2007','Music'],
             ['Viral Clips 2006','Viral'],
@@ -78,7 +90,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* TICKER */}      <div id="ticker">
+      {/* TICKER */}
+      <div id="ticker">
         <span id="ticker-label">ARCHIVE NEWS</span>
         <div id="ticker-scroll-wrap">
           <span id="ticker-inner">
@@ -96,12 +109,12 @@ export default function App() {
       <div id="main">
         <Sidebar onSearch={doSearch} onOpen={openVideo} />
         <div id="content">
-          {/* All pages stay mounted — no remount = no refetch */}
           <div style={{ display: page === 'home'   ? 'block' : 'none' }}><HomePage onOpen={openVideo} /></div>
           <div style={{ display: page === 'search' ? 'block' : 'none' }}><SearchPage query={searchQuery} onOpen={openVideo} /></div>
           <div style={{ display: page === 'video'  ? 'block' : 'none' }}>
             <VideoPage
               videoId={videoId}
+              iframeRef={iframeRef}
               title={videoItem?.snippet?.title}
               snippet={videoItem?.snippet}
               statistics={videoItem?.statistics}

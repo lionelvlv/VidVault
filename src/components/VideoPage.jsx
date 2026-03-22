@@ -1,8 +1,7 @@
-import { fmtCount, fmtDate } from '../utils'
+import { fmtDate } from '../utils'
 
-export function VideoPage({ videoId, title, snippet, statistics, onBack, onOpen }) {
-  const sn = snippet    ?? {}
-  const st = statistics ?? {}
+export function VideoPage({ videoId, iframeRef, title, snippet, onBack }) {
+  const sn = snippet ?? {}
 
   return (
     <div>
@@ -10,7 +9,8 @@ export function VideoPage({ videoId, title, snippet, statistics, onBack, onOpen 
 
       <div id="player-wrap">
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+          ref={iframeRef}
+          src={videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : ''}
           allowFullScreen
           title={title}
         />
