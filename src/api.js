@@ -54,9 +54,13 @@ export async function ytSearch(query, order, pageToken) {
   const key = 'search:' + p.toString()
 
   const cached = lsGet(key)
-  if (cached) return cached
+  if (cached) {
+    console.log(`[VidVault API] SEARCH cache hit — q="${query}" order="${order || 'relevance'}"`)
+    return cached
+  }
 
   return _dedupe(key, async () => {
+    console.log(`[VidVault API] SEARCH fetch — q="${query}" order="${order || 'relevance'}"${pageToken ? ` pageToken=${pageToken}` : ''}`)
     const res = await fetch(`/api/search?${p}`)
     if (!res.ok) throw new Error(`Search error ${res.status}`)
     const data = await res.json()
@@ -77,11 +81,15 @@ export async function ytVideoDetails(ids) {
     else     missing.push(id)
   }
 
-  if (!missing.length) return { items: cached }
+  if (!missing.length) {
+    console.log(`[VidVault API] VIDEOS all cached — ids=[${ids.join(', ')}]`)
+    return { items: cached }
+  }
 
   const key = 'videos:' + missing.sort().join(',')
 
   const fresh = await _dedupe(key, async () => {
+    console.log(`[VidVault API] VIDEOS fetch — ids=[${missing.join(', ')}] (${missing.length} uncached, ${cached.length} from cache)`)
     const res = await fetch(`/api/videos?ids=${missing.join(',')}`)
     if (!res.ok) throw new Error(`Details error ${res.status}`)
     return res.json()
