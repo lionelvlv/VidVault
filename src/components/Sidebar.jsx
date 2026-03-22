@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { ytSearch } from '../api'
 import { getVideoId } from '../utils'
 
 const CATS = [
@@ -21,102 +22,73 @@ const TAGS = [
   ['dance 2006','dance'], ['machinima 2007','machinima'], ['flash animation 2006','flash'],
 ]
 
-// 5 broad queries that together cover the whole era well.
-// Fetched once, cached for 7 days → ~60 videos in the pool.
-// Randomness: pick a random TOPIC first, then a random video from that topic.
-const POOL_QUERIES = [
-  { q: 'video 2006',  order: 'date'      },
-  { q: 'video 2007',  order: 'date'      },
-  { q: 'funny 2006',  order: 'relevance' },
-  { q: 'music 2007',  order: 'relevance' },
-  { q: 'vlog 2008',   order: 'date'      },
-]
+const YEARS = ['2005', '2006', '2007', '2008', '2009']
 
-const POOL_KEY = 'vv2_random_pool'
-const POOL_TTL = 7 * 24 * 60 * 60 * 1000  // 7 days — these results barely change
+// Datamuse word pool — fetched once per session, cached in memory
+// api.datamuse.com is free, no key needed, not YouTube quota
+let _wordPool = null
 
-function loadPoolFromStorage() {
+async function getWordPool() {
+  if (_wordPool) return _wordPool
   try {
-    const raw = localStorage.getItem(POOL_KEY)
-    if (!raw) return null
-    const { buckets, ts } = JSON.parse(raw)
-    if (Date.now() - ts > POOL_TTL) { localStorage.removeItem(POOL_KEY); return null }
-    return buckets  // { [query]: [items] }
-  } catch { return null }
-}
-
-function savePoolToStorage(buckets) {
-  try { localStorage.setItem(POOL_KEY, JSON.stringify({ buckets, ts: Date.now() })) } catch {}
-}
-
-async function buildPool() {
-  const stored = loadPoolFromStorage()
-  if (stored && Object.keys(stored).length > 0) return stored
-
-  console.log('[VidVault] Building random pool (5 fetches, once per 7 days)…')
-  const results = await Promise.all(
-    POOL_QUERIES.map(({ q, order }) =>
-      fetch(`/api/search?q=${encodeURIComponent(q)}&order=${order}`)
-        .then(r => r.json())
-        .catch(() => ({ items: [] }))
-    )
-  )
-
-  // Store as buckets keyed by query so we can pick topic-first
-  const buckets = {}
-  POOL_QUERIES.forEach(({ q }, i) => {
-    buckets[q] = results[i].items ?? []
-  })
-  savePoolToStorage(buckets)
-  return buckets
-}
-
-// Module-level so pool persists for the whole session without re-fetching
-let _poolPromise = null
-function getPool() {
-  if (!_poolPromise) _poolPromise = buildPool()
-  return _poolPromise
+    const seeds = ['fun', 'life', 'people', 'world', 'time', 'happy', 'action', 'play',
+                   'music', 'food', 'school', 'sport', 'travel', 'home', 'nature']
+    const seed  = seeds[Math.floor(Math.random() * seeds.length)]
+    const res   = await fetch(`https://api.datamuse.com/words?ml=${seed}&max=500`)
+    if (!res.ok) throw new Error()
+    const words = await res.json()
+    _wordPool = words.map(w => w.word).filter(w => w && !w.includes(' '))
+    return _wordPool
+  } catch {
+    // Fallback — no network needed
+    _wordPool = ['funny', 'dog', 'skateboard', 'magic', 'dance', 'baby', 'cooking',
+                 'fail', 'cat', 'prank', 'sports', 'wedding', 'concert', 'school',
+                 'science', 'travel', 'birthday', 'talent', 'workout', 'animals']
+    return _wordPool
+  }
 }
 
 export function Sidebar({ onSearch, onOpen }) {
-  const [loading, setLoading]   = useState(false)
-  const seenIds = useRef(new Set())
+  const [loading, setLoading] = useState(false)
+  const seenIds   = useRef(new Set())
+  const localPool = useRef([])   // leftover videos from last fetch — free to serve
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      const buckets = await getPool()
-      const topics  = Object.keys(buckets)
-
-      // Pick a random topic, then a random unseen video from it
-      // Shuffle topics so we don't always start with the same one
-      const shuffled = topics.sort(() => Math.random() - 0.5)
-
-      let picked = null
-      for (const topic of shuffled) {
-        const unseen = buckets[topic].filter(
-          item => !seenIds.current.has(getVideoId(item))
-        )
-        if (unseen.length > 0) {
-          picked = unseen[Math.floor(Math.random() * unseen.length)]
-          break
-        }
-      }
-
-      // All videos seen — reset and pick fresh
-      if (!picked) {
-        seenIds.current.clear()
-        const topic = topics[Math.floor(Math.random() * topics.length)]
-        const items = buckets[topic]
-        picked = items[Math.floor(Math.random() * items.length)]
-      }
-
-      const id = getVideoId(picked)
-      if (id) {
+      // Drain local pool first — zero YouTube API cost
+      const unseen = localPool.current.filter(
+        item => !seenIds.current.has(getVideoId(item))
+      )
+      if (unseen.length > 0) {
+        const item = unseen[Math.floor(Math.random() * unseen.length)]
+        const id   = getVideoId(item)
         seenIds.current.add(id)
-        onOpen(id, picked)
+        localPool.current = localPool.current.filter(i => getVideoId(i) !== id)
+        onOpen(id, item)
+        setLoading(false)
+        return
       }
+
+      // Pool empty — 1 Datamuse fetch (free) + 1 YouTube call → ~12 videos
+      const words = await getWordPool()
+      const word  = words[Math.floor(Math.random() * words.length)]
+      const year  = YEARS[Math.floor(Math.random() * YEARS.length)]
+      const order = Math.random() > 0.5 ? 'relevance' : 'date'
+
+      const data  = await ytSearch(`${word} ${year}`, order)
+      const items = (data.items ?? [])
+        .filter(item => !seenIds.current.has(getVideoId(item)))
+        .sort(() => Math.random() - 0.5)
+
+      if (!items.length) { setLoading(false); return }
+
+      const [first, ...rest] = items
+      const id = getVideoId(first)
+      seenIds.current.add(id)
+      localPool.current = rest   // up to 11 free future clicks
+      onOpen(id, first)
     } catch {}
     setLoading(false)
   }
