@@ -1,4 +1,10 @@
 {
+  "version": 2,
+  "outputDirectory": ".",
+  "functions": {
+    "api/search.js": { "runtime": "nodejs20.x" },
+    "api/videos.js": { "runtime": "nodejs20.x" }
+  },
   "rewrites": [
     { "source": "/api/search", "destination": "/api/search.js" },
     { "source": "/api/videos", "destination": "/api/videos.js" }
