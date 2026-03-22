@@ -24,26 +24,22 @@ const TAGS = [
 
 const YEARS = ['2005', '2006', '2007', '2008', '2009']
 
-// Datamuse word pool — fetched once per session, cached in memory
-// api.datamuse.com is free, no key needed, not YouTube quota
+// Datamuse: free, no key, no quota — fetch once per session
 let _wordPool = null
-
 async function getWordPool() {
   if (_wordPool) return _wordPool
   try {
-    const seeds = ['fun', 'life', 'people', 'world', 'time', 'happy', 'action', 'play',
-                   'music', 'food', 'school', 'sport', 'travel', 'home', 'nature']
-    const seed  = seeds[Math.floor(Math.random() * seeds.length)]
-    const res   = await fetch(`https://api.datamuse.com/words?ml=${seed}&max=500`)
-    if (!res.ok) throw new Error()
-    const words = await res.json()
-    _wordPool = words.map(w => w.word).filter(w => w && !w.includes(' '))
+    const seeds = ['fun','life','people','world','time','happy','action','music',
+                   'food','school','sport','travel','home','nature','play']
+    const seed = seeds[Math.floor(Math.random() * seeds.length)]
+    const res  = await fetch(`https://api.datamuse.com/words?ml=${seed}&max=500`)
+    const data = await res.json()
+    _wordPool = data.map(w => w.word).filter(w => w && !w.includes(' ') && w.length > 2)
     return _wordPool
   } catch {
-    // Fallback — no network needed
-    _wordPool = ['funny', 'dog', 'skateboard', 'magic', 'dance', 'baby', 'cooking',
-                 'fail', 'cat', 'prank', 'sports', 'wedding', 'concert', 'school',
-                 'science', 'travel', 'birthday', 'talent', 'workout', 'animals']
+    _wordPool = ['funny','dog','skateboard','magic','dance','baby','cooking','fail',
+                 'cat','prank','sports','wedding','concert','school','science',
+                 'travel','birthday','talent','animals','music','gaming','vlog']
     return _wordPool
   }
 }
@@ -51,13 +47,13 @@ async function getWordPool() {
 export function Sidebar({ onSearch, onOpen }) {
   const [loading, setLoading] = useState(false)
   const seenIds   = useRef(new Set())
-  const localPool = useRef([])   // leftover videos from last fetch — free to serve
+  const localPool = useRef([])  // leftover videos from last fetch, served free
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      // Drain local pool first — zero YouTube API cost
+      // Drain local pool first — zero cost
       const unseen = localPool.current.filter(
         item => !seenIds.current.has(getVideoId(item))
       )
@@ -71,7 +67,7 @@ export function Sidebar({ onSearch, onOpen }) {
         return
       }
 
-      // Pool empty — 1 Datamuse fetch (free) + 1 YouTube call → ~12 videos
+      // Pool empty — fetch with a truly random word + year
       const words = await getWordPool()
       const word  = words[Math.floor(Math.random() * words.length)]
       const year  = YEARS[Math.floor(Math.random() * YEARS.length)]
@@ -87,7 +83,7 @@ export function Sidebar({ onSearch, onOpen }) {
       const [first, ...rest] = items
       const id = getVideoId(first)
       seenIds.current.add(id)
-      localPool.current = rest   // up to 11 free future clicks
+      localPool.current = rest  // up to ~15 free future clicks
       onOpen(id, first)
     } catch {}
     setLoading(false)
