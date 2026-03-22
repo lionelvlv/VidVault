@@ -4,43 +4,47 @@ import { getVideoId, fmtCount } from '../utils'
 import { ResultRow } from './VideoCard'
 
 export function SearchPage({ query, onOpen }) {
-  const [sort, setSort]   = useState('relevance')
-  const [items, setItems] = useState([])
-  const [status, setStatus] = useState('loading')
-  const [page, setPage]   = useState(1)
-  const [hasMore, setHasMore] = useState(false)
+  const [sort, setSort]       = useState('relevance')
+  const [items, setItems]     = useState([])
+  const [status, setStatus]   = useState('loading')
+  const [page, setPage]       = useState(1)
+  const [nextToken, setNext]  = useState(null)
+  const [prevTokens, setPrev] = useState([])
 
   const sortRef = useRef(sort)
   sortRef.current = sort
 
-  function load(pageNum) {
+  function load(pageParam) {
     if (!query) return
     setStatus('loading')
     setItems([])
-    ytSearch(query, sortRef.current, pageNum)
+    ytSearch(query, sortRef.current, pageParam ?? 1)
       .then(data => {
         if (!data.items?.length) { setStatus('empty'); return }
         setItems(data.items)
-        setHasMore(data.items.length >= 10) // Invidious returns ~20, assume more if full page
+        setNext(data.nextPageToken ?? null)
         setStatus('ok')
       })
       .catch(err => setStatus('error:' + err.message))
   }
 
   useEffect(() => {
-    setPage(1)
+    setPage(1); setPrev([]); setNext(null)
     load(1)
   }, [query, sort]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function goNext() {
-    const next = page + 1
-    setPage(next)
-    load(next)
+    if (!nextToken) return
+    setPrev(p => [...p, { page, token: nextToken }])
+    setPage(p => p + 1)
+    load(nextToken)
   }
   function goPrev() {
-    const prev = page - 1
-    setPage(prev)
-    load(prev)
+    if (page <= 1) return
+    const prev = prevTokens[prevTokens.length - 1]
+    setPrev(p => p.slice(0, -1))
+    setPage(p => p - 1)
+    load(prev?.token ?? 1)
   }
 
   return (
@@ -49,6 +53,7 @@ export function SearchPage({ query, onOpen }) {
         <span className="sort-label">Sort results:</span>
         <button className={`sort-btn${sort === 'relevance' ? ' active' : ''}`} onClick={() => setSort('relevance')}>Best Match</button>
         <button className={`sort-btn${sort === 'date' ? ' active' : ''}`} onClick={() => setSort('date')}>Most Recent</button>
+        <button className={`sort-btn${sort === 'viewCount' ? ' active' : ''}`} onClick={() => setSort('viewCount')}>Most Viewed</button>
       </div>
 
       {status === 'loading' && (
@@ -58,7 +63,7 @@ export function SearchPage({ query, onOpen }) {
           <div className="loading-sub">Please wait · Connecting to VidVault servers</div>
         </div>
       )}
-      {status === 'empty' && <div className="empty-box">No videos found in the archive for this search.</div>}
+      {status === 'empty'          && <div className="empty-box">No videos found in the archive for this search.</div>}
       {status.startsWith('error:') && <div className="error-box">Error loading results.<br /><small>{status.slice(6)}</small></div>}
       {status === 'ok' && items.map((item, i) => (
         <ResultRow key={getVideoId(item) ?? i} item={item} onOpen={onOpen} />
@@ -66,9 +71,9 @@ export function SearchPage({ query, onOpen }) {
 
       {status === 'ok' && (
         <div className="pagination">
-          {page > 1   && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
+          {page > 1    && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
           <button className="page-btn active">Page {page}</button>
-          {hasMore    && <button className="page-btn" onClick={goNext}>Next ▶</button>}
+          {nextToken   && <button className="page-btn" onClick={goNext}>Next ▶</button>}
         </div>
       )}
     </div>

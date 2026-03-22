@@ -1,5 +1,5 @@
 // ── Cache ─────────────────────────────────────────────────────────────────────
-const TTL = 7 * 24 * 60 * 60 * 1000  // 7 days — era-locked results never change
+const TTL = 7 * 24 * 60 * 60 * 1000
 const LS_PREFIX = 'vv2_'
 
 function lsGet(key) {
@@ -29,7 +29,8 @@ async function _dedupe(key, fetcher) {
   return p
 }
 
-// ── Public API — proxied through Vercel serverless ────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
+// page: '1' for first page, or a continuation token string for subsequent pages
 
 export async function ytSearch(query, order, page = 1) {
   const key = `search:${query}:${order || 'relevance'}:${page}`
@@ -49,5 +50,4 @@ export async function ytSearch(query, order, page = 1) {
   })
 }
 
-// No-op — Piped returns stats inline with search results
 export async function ytVideoDetails() { return { items: [] } }
