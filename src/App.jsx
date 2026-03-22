@@ -119,9 +119,10 @@ export default function App() {
       <div id="main">
         <Sidebar onSearch={doSearch} />
         <div id="content">
-          {page === 'home'   && <HomePage onOpen={openVideo} />}
-          {page === 'search' && <SearchPage query={searchQuery} onOpen={openVideo} />}
-          {page === 'video'  && (
+          {/* All pages stay mounted — no remount = no refetch */}
+          <div style={{ display: page === 'home'   ? 'block' : 'none' }}><HomePage onOpen={openVideo} /></div>
+          <div style={{ display: page === 'search' ? 'block' : 'none' }}><SearchPage query={searchQuery} onOpen={openVideo} /></div>
+          <div style={{ display: page === 'video'  ? 'block' : 'none' }}>
             <VideoPage
               videoId={videoId}
               title={videoTitle}
@@ -129,7 +130,7 @@ export default function App() {
               onBack={backFromVideo}
               onOpen={openVideo}
             />
-          )}
+          </div>
         </div>
       </div>
 
