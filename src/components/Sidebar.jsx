@@ -47,27 +47,11 @@ async function getWordPool() {
 export function Sidebar({ onSearch, onOpen }) {
   const [loading, setLoading] = useState(false)
   const seenIds   = useRef(new Set())
-  const localPool = useRef([])  // leftover videos from last fetch, served free
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      // Drain local pool first — zero cost
-      const unseen = localPool.current.filter(
-        item => !seenIds.current.has(getVideoId(item))
-      )
-      if (unseen.length > 0) {
-        const item = unseen[Math.floor(Math.random() * unseen.length)]
-        const id   = getVideoId(item)
-        seenIds.current.add(id)
-        localPool.current = localPool.current.filter(i => getVideoId(i) !== id)
-        onOpen(id, item)
-        setLoading(false)
-        return
-      }
-
-      // Pool empty — fetch with a truly random word + year
       const words = await getWordPool()
       const word  = words[Math.floor(Math.random() * words.length)]
       const year  = YEARS[Math.floor(Math.random() * YEARS.length)]
@@ -78,13 +62,14 @@ export function Sidebar({ onSearch, onOpen }) {
         .filter(item => !seenIds.current.has(getVideoId(item)))
         .sort(() => Math.random() - 0.5)
 
-      if (!items.length) { setLoading(false); return }
+      // If all results seen, reset history and pick from full set
+      const pool = items.length > 0 ? items : (data.items ?? []).sort(() => Math.random() - 0.5)
+      if (!pool.length) { setLoading(false); return }
 
-      const [first, ...rest] = items
-      const id = getVideoId(first)
+      const item = pool[Math.floor(Math.random() * pool.length)]
+      const id   = getVideoId(item)
       seenIds.current.add(id)
-      localPool.current = rest  // up to ~15 free future clicks
-      onOpen(id, first)
+      onOpen(id, item)
     } catch {}
     setLoading(false)
   }
