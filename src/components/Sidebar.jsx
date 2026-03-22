@@ -22,102 +22,73 @@ const TAGS = [
   ['dance 2006','dance'], ['machinima 2007','machinima'], ['flash animation 2006','flash'],
 ]
 
-const YEARS = ['2005', '2006', '2007', '2008', '2009']
+// Fixed cacheable queries — shuffled per session for variety.
+// Each query costs 1 API call but yields ~12 videos served for free after that.
+const RANDOM_QUERIES = [
+  ['funny home video 2006',   'date'],
+  ['viral video 2007',        'relevance'],
+  ['music video 2006',        'relevance'],
+  ['vlog 2007',               'date'],
+  ['prank 2006',              'date'],
+  ['skateboard fail 2007',    'relevance'],
+  ['flash animation 2006',    'relevance'],
+  ['gaming 2007',             'date'],
+  ['cute animals 2006',       'relevance'],
+  ['dance video 2007',        'date'],
+  ['comedy skit 2007',        'relevance'],
+  ['school project 2006',     'date'],
+  ['sports highlight 2007',   'relevance'],
+  ['talent show 2006',        'date'],
+  ['magic trick 2007',        'relevance'],
+  ['cooking tutorial 2006',   'date'],
+  ['news clip 2006',          'relevance'],
+  ['anime amv 2007',          'date'],
+  ['original video 2005',     'date'],
+  ['concert recording 2007',  'relevance'],
+].sort(() => Math.random() - 0.5)
 
-// Seeds for Datamuse — fetched once, cached for 7 days
-const DATAMUSE_SEEDS = ['fun','life','people','world','time','happy','action','play',
-                        'music','food','school','sport','travel','home','nature']
-const DATAMUSE_CACHE_KEY = 'vv2_datamuse_words'
-const DATAMUSE_TTL = 7 * 24 * 60 * 60 * 1000
-
-async function getWordPool() {
-  // Return cached pool if fresh
-  try {
-    const raw = localStorage.getItem(DATAMUSE_CACHE_KEY)
-    if (raw) {
-      const { words, ts } = JSON.parse(raw)
-      if (Date.now() - ts < DATAMUSE_TTL && words.length > 50) return words
-    }
-  } catch {}
-
-  // Fetch from Datamuse — pick 3 random seeds and merge results
-  try {
-    const seeds = [...DATAMUSE_SEEDS].sort(() => Math.random() - 0.5).slice(0, 3)
-    const results = await Promise.all(
-      seeds.map(s => fetch(`https://api.datamuse.com/words?ml=${s}&max=500`)
-        .then(r => r.json()).catch(() => []))
-    )
-    const words = [...new Set(results.flat().map(w => w.word).filter(w => w && w.length > 2 && !w.includes(' ')))]
-    if (words.length > 20) {
-      try { localStorage.setItem(DATAMUSE_CACHE_KEY, JSON.stringify({ words, ts: Date.now() })) } catch {}
-      return words
-    }
-  } catch {}
-
-  // Hardcoded fallback
-  return ['funny','dog','skateboard','magic','dance','baby','cooking','trick','fail',
-          'cat','music','prank','sports','wedding','concert','school','science','travel',
-          'birthday','surprise','talent','workout','nature','food','city','family']
-}
-
-// Module-level video pool so it persists across re-renders without a ref
-let _videoPool = []
-let _poolFilling = false
-
-async function fillPool(seenIds) {
-  if (_poolFilling) return
-  _poolFilling = true
-  try {
-    const wordPool = await getWordPool()
-    // Pick 3 random words and fetch their search results in parallel — 3 API calls, ~36 videos
-    const picks = Array.from({ length: 3 }, () => {
-      const word = wordPool[Math.floor(Math.random() * wordPool.length)]
-      const year = YEARS[Math.floor(Math.random() * YEARS.length)]
-      const order = Math.random() > 0.5 ? 'relevance' : 'date'
-      return { word, year, order }
-    })
-    const results = await Promise.all(
-      picks.map(({ word, year, order }) => ytSearch(`${word} ${year}`, order).catch(() => ({ items: [] })))
-    )
-    const newItems = results.flatMap(d => d.items ?? [])
-      .filter(item => {
-        const id = getVideoId(item)
-        return id && !seenIds.has(id)
-      })
-    // Shuffle and add to pool
-    _videoPool.push(...newItems.sort(() => Math.random() - 0.5))
-  } finally {
-    _poolFilling = false
-  }
-}
+let _queryIdx = 0
 
 export function Sidebar({ onSearch, onOpen }) {
   const [loading, setLoading] = useState(false)
-  const seenIds = useRef(new Set())
+  const seenIds   = useRef(new Set())
+  const localPool = useRef([])  // leftover videos from last fetch, served for free
 
   async function loadRandom() {
     if (loading) return
     setLoading(true)
     try {
-      // If pool is running low, refill in background (or wait if empty)
-      if (_videoPool.length < 5) {
-        await fillPool(seenIds.current)
-      } else if (_videoPool.length < 15) {
-        // Refill in background while we serve from existing pool
-        fillPool(seenIds.current)
+      // Drain local pool first — zero API cost
+      const unseen = localPool.current.filter(
+        item => !seenIds.current.has(getVideoId(item))
+      )
+
+      if (unseen.length > 0) {
+        const item = unseen[Math.floor(Math.random() * unseen.length)]
+        const id   = getVideoId(item)
+        seenIds.current.add(id)
+        localPool.current = localPool.current.filter(i => getVideoId(i) !== id)
+        onOpen(id, item)
+        setLoading(false)
+        return
       }
 
-      // Pop from pool
-      if (_videoPool.length > 0) {
-        // Find first item not already seen
-        const idx = _videoPool.findIndex(item => !seenIds.current.has(getVideoId(item)))
-        const item = idx >= 0 ? _videoPool.splice(idx, 1)[0] : _videoPool.shift()
-        const id = getVideoId(item)
-        if (id) {
-          seenIds.current.add(id)
-          onOpen(id, item)
-        }
-      }
+      // Pool empty — exactly 1 API call, stash the rest for future free clicks
+      const [q, order] = RANDOM_QUERIES[_queryIdx % RANDOM_QUERIES.length]
+      _queryIdx++
+
+      const data  = await ytSearch(q, order)
+      const items = (data.items ?? [])
+        .filter(item => !seenIds.current.has(getVideoId(item)))
+        .sort(() => Math.random() - 0.5)
+
+      if (!items.length) { setLoading(false); return }
+
+      const [first, ...rest] = items
+      const id = getVideoId(first)
+      seenIds.current.add(id)
+      localPool.current = rest   // up to 11 free future clicks from this 1 call
+      onOpen(id, first)
     } catch {}
     setLoading(false)
   }
