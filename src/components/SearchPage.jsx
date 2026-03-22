@@ -4,52 +4,43 @@ import { getVideoId, fmtCount } from '../utils'
 import { ResultRow } from './VideoCard'
 
 export function SearchPage({ query, onOpen }) {
-  const [sort, setSort]           = useState('relevance')
-  const [items, setItems]         = useState([])
-  const [status, setStatus]       = useState('loading')
-  const [totalLabel, setTotal]    = useState('')
-  const [nextToken, setNextToken] = useState(null)
-  const [prevTokens, setPrev]     = useState([])
-  const [page, setPage]           = useState(0)
+  const [sort, setSort]   = useState('relevance')
+  const [items, setItems] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [page, setPage]   = useState(1)
+  const [hasMore, setHasMore] = useState(false)
 
-  // Use a ref so the load function is stable and never causes effect re-fires
   const sortRef = useRef(sort)
   sortRef.current = sort
 
-  function load(pageToken) {
+  function load(pageNum) {
     if (!query) return
     setStatus('loading')
     setItems([])
-    ytSearch(query, sortRef.current, pageToken)
+    ytSearch(query, sortRef.current, pageNum)
       .then(data => {
         if (!data.items?.length) { setStatus('empty'); return }
         setItems(data.items)
-        const total = data.pageInfo?.totalResults
-        setTotal(total ? `~${fmtCount(total)} results (2005–2009)` : '')
-        setNextToken(data.nextPageToken ?? null)
+        setHasMore(data.items.length >= 10) // Invidious returns ~20, assume more if full page
         setStatus('ok')
       })
       .catch(err => setStatus('error:' + err.message))
   }
 
-  // Only re-fire when query or sort actually changes
   useEffect(() => {
-    setPrev([]); setPage(0); setNextToken(null)
-    load(null)
+    setPage(1)
+    load(1)
   }, [query, sort]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function goNext() {
-    if (!nextToken) return
-    setPrev(p => [...p, nextToken])
-    setPage(p => p + 1)
-    load(nextToken)
+    const next = page + 1
+    setPage(next)
+    load(next)
   }
   function goPrev() {
-    if (page === 0) return
-    const newPage = page - 1
-    setPage(newPage)
-    setPrev(p => p.slice(0, -1))
-    load(newPage === 0 ? null : prevTokens[newPage - 1])
+    const prev = page - 1
+    setPage(prev)
+    load(prev)
   }
 
   return (
@@ -57,8 +48,7 @@ export function SearchPage({ query, onOpen }) {
       <div className="sort-bar">
         <span className="sort-label">Sort results:</span>
         <button className={`sort-btn${sort === 'relevance' ? ' active' : ''}`} onClick={() => setSort('relevance')}>Best Match</button>
-        <button className={`sort-btn${sort === 'viewCount' ? ' active' : ''}`} onClick={() => setSort('viewCount')}>Most Viewed</button>
-        <span className="result-count">{totalLabel}</span>
+        <button className={`sort-btn${sort === 'date' ? ' active' : ''}`} onClick={() => setSort('date')}>Most Recent</button>
       </div>
 
       {status === 'loading' && (
@@ -76,9 +66,9 @@ export function SearchPage({ query, onOpen }) {
 
       {status === 'ok' && (
         <div className="pagination">
-          {page > 0  && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
-          <button className="page-btn active">Page {page + 1}</button>
-          {nextToken && <button className="page-btn" onClick={goNext}>Next ▶</button>}
+          {page > 1   && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
+          <button className="page-btn active">Page {page}</button>
+          {hasMore    && <button className="page-btn" onClick={goNext}>Next ▶</button>}
         </div>
       )}
     </div>
