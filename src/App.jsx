@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useClock } from './hooks/useClock'
 import { Sidebar } from './components/Sidebar'
 import { HomePage } from './components/HomePage'
@@ -15,20 +15,20 @@ export default function App() {
   const [lastSearch, setLast]     = useState('')
   const inputRef = useRef(null)
 
-  function doSearch(q) {
+  const doSearch = useCallback((q) => {
     const term = q ?? inputRef.current?.value.trim()
     if (!term) return
     if (inputRef.current) inputRef.current.value = term
     setSearch(term)
     setLast(term)
     setPage('search')
-  }
+  }, [])
 
-  function openVideo(id, title) {
+  const openVideo = useCallback((id, title) => {
     setVideoId(id)
     setVTitle(title)
     setPage('video')
-  }
+  }, [])
 
   function backFromVideo() {
     setPage(lastSearch ? 'search' : 'home')

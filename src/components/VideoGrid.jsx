@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { ytSearch, ytVideoDetails } from '../api'
 import { getVideoId } from '../utils'
 import { VideoCard } from './VideoCard'
 
 export function VideoGrid({ query, order, count = 4, cols = 4, onOpen }) {
   const [items, setItems] = useState([])
-  const [status, setStatus] = useState('loading') // loading | ok | error | empty
+  const [status, setStatus] = useState('loading')
+
+  // Stable key prevents re-fetching when parent re-renders with same props
+  const fetchKey = useMemo(() => `${query}|${order}|${count}`, [query, order, count])
 
   useEffect(() => {
     let cancelled = false
@@ -31,7 +34,7 @@ export function VideoGrid({ query, order, count = 4, cols = 4, onOpen }) {
       }
     })()
     return () => { cancelled = true }
-  }, [query, order, count])
+  }, [fetchKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (status === 'loading') return <div className="loading-inline">Loading…</div>
   if (status === 'empty')   return <div className="empty-box">No videos found for this era.</div>

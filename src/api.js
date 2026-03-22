@@ -1,35 +1,94 @@
-const _cache = new Map()
-const CACHE_MS = 5 * 60 * 1000
+// ── Cache TTLs ────────────────────────────────────────────────────────────────
+const TTL_SEARCH = 24 * 60 * 60 * 1000   // 24 h  — search results
+const TTL_VIDEO  = 7  * 24 * 60 * 60 * 1000 // 7 days — video details (static data)
+const LS_PREFIX  = 'vv2_'
 
-function _getCached(key) {
-  const e = _cache.get(key)
-  if (!e) return null
-  if (Date.now() - e.ts > CACHE_MS) { _cache.delete(key); return null }
-  return e.data
+// ── localStorage helpers ──────────────────────────────────────────────────────
+function lsGet(key) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + key)
+    if (!raw) return null
+    const { data, ts, ttl } = JSON.parse(raw)
+    if (Date.now() - ts > ttl) { localStorage.removeItem(LS_PREFIX + key); return null }
+    return data
+  } catch { return null }
 }
-function _setCache(key, data) { _cache.set(key, { data, ts: Date.now() }) }
+
+function lsSet(key, data, ttl) {
+  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify({ data, ts: Date.now(), ttl })) }
+  catch (e) {
+    // Storage quota exceeded — prune oldest entries and retry once
+    if (e.name === 'QuotaExceededError') pruneLS()
+  }
+}
+
+function pruneLS() {
+  // Remove all our keys — simple but effective safety valve
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(LS_PREFIX))
+    .forEach(k => localStorage.removeItem(k))
+}
+
+// ── In-flight deduplication ───────────────────────────────────────────────────
+// Prevents multiple simultaneous identical fetches (e.g. home page grid mount)
+const _inflight = new Map()
+
+async function _dedupe(key, fetcher) {
+  if (_inflight.has(key)) return _inflight.get(key)
+  const promise = fetcher().finally(() => _inflight.delete(key))
+  _inflight.set(key, promise)
+  return promise
+}
+
+// ── Per-video detail cache ────────────────────────────────────────────────────
+// Caches individual video objects so a batch that overlaps a previous batch
+// only fetches the truly new IDs.
+function getCachedVideo(id) { return lsGet('v:' + id) }
+function setCachedVideo(id, item) { lsSet('v:' + id, item, TTL_VIDEO) }
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function ytSearch(query, order, pageToken) {
   const p = new URLSearchParams({ q: query, order: order || 'relevance' })
   if (pageToken) p.set('pageToken', pageToken)
   const key = 'search:' + p.toString()
-  const hit = _getCached(key)
-  if (hit) return hit
-  const res = await fetch(`/api/search?${p}`)
-  if (!res.ok) throw new Error(`Search error ${res.status}`)
-  const data = await res.json()
-  _setCache(key, data)
-  return data
+
+  const cached = lsGet(key)
+  if (cached) return cached
+
+  return _dedupe(key, async () => {
+    const res = await fetch(`/api/search?${p}`)
+    if (!res.ok) throw new Error(`Search error ${res.status}`)
+    const data = await res.json()
+    lsSet(key, data, TTL_SEARCH)
+    return data
+  })
 }
 
 export async function ytVideoDetails(ids) {
   if (!ids.length) return { items: [] }
-  const key = 'videos:' + ids.join(',')
-  const hit = _getCached(key)
-  if (hit) return hit
-  const res = await fetch(`/api/videos?ids=${ids.join(',')}`)
-  if (!res.ok) throw new Error(`Details error ${res.status}`)
-  const data = await res.json()
-  _setCache(key, data)
-  return data
+
+  // Split into cached vs uncached
+  const cached  = []
+  const missing = []
+  for (const id of ids) {
+    const hit = getCachedVideo(id)
+    if (hit) cached.push(hit)
+    else     missing.push(id)
+  }
+
+  if (!missing.length) return { items: cached }
+
+  const key = 'videos:' + missing.sort().join(',')
+
+  const fresh = await _dedupe(key, async () => {
+    const res = await fetch(`/api/videos?ids=${missing.join(',')}`)
+    if (!res.ok) throw new Error(`Details error ${res.status}`)
+    return res.json()
+  })
+
+  // Store each video individually for future reuse
+  for (const item of fresh.items ?? []) setCachedVideo(item.id, item)
+
+  return { items: [...cached, ...(fresh.items ?? [])] }
 }
