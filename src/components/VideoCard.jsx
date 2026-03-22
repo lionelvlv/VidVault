@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { getVideoId, getThumbnailUrl, fmtDate, fmtCount, fakeTimestamp, computeStars } from '../utils'
 
 function Stars({ st }) {
@@ -11,9 +12,10 @@ function Stars({ st }) {
   )
 }
 
-function Thumb({ item, unavailable }) {
+function Thumb({ id, item, unavailable }) {
   const url = getThumbnailUrl(item)
-  const ts  = fakeTimestamp()
+  // Stable per video ID — won't change on re-render
+  const ts = useMemo(() => fakeTimestamp(), [id])
   return (
     <div className="thumb-wrap">
       {url
@@ -34,7 +36,7 @@ export function VideoCard({ item, onOpen }) {
   return (
     <div className={`video-card${unavail ? ' unavailable' : ''}`}
          onClick={() => !unavail && id && onOpen(id, sn.title ?? '')}>
-      <Thumb item={item} unavailable={unavail} />
+      <Thumb id={id} item={item} unavailable={unavail} />
       <div className="video-info">
         <div className="video-title">{sn.title ?? 'Untitled'}</div>
         <div className="video-date">{fmtDate(sn.publishedAt)}</div>
@@ -54,7 +56,7 @@ export function ResultRow({ item, onOpen }) {
     <div className={`result-row${unavail ? ' unavailable' : ''}`}
          onClick={() => !unavail && id && onOpen(id, sn.title ?? '')}>
       <div className="result-thumb">
-        <Thumb item={item} unavailable={unavail} />
+        <Thumb id={id} item={item} unavailable={unavail} />
       </div>
       <div className="result-info">
         <div className="result-title">{sn.title ?? 'Untitled'}</div>

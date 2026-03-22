@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ytSearch } from '../api'
 import { getVideoId, fmtCount } from '../utils'
 import { ResultRow } from './VideoCard'
@@ -12,28 +12,31 @@ export function SearchPage({ query, onOpen }) {
   const [prevTokens, setPrev]     = useState([])
   const [page, setPage]           = useState(0)
 
-  const load = useCallback(async (pageToken) => {
+  // Use a ref so the load function is stable and never causes effect re-fires
+  const sortRef = useRef(sort)
+  sortRef.current = sort
+
+  function load(pageToken) {
     if (!query) return
     setStatus('loading')
     setItems([])
-    try {
-      const data = await ytSearch(query, sort, pageToken)
-      if (!data.items?.length) { setStatus('empty'); return }
-      // Use search result data directly — no second details fetch needed
-      setItems(data.items)
-      const total = data.pageInfo?.totalResults
-      setTotal(total ? `~${fmtCount(total)} results (2005–2009)` : '')
-      setNextToken(data.nextPageToken ?? null)
-      setStatus('ok')
-    } catch (err) {
-      setStatus('error:' + err.message)
-    }
-  }, [query, sort])
+    ytSearch(query, sortRef.current, pageToken)
+      .then(data => {
+        if (!data.items?.length) { setStatus('empty'); return }
+        setItems(data.items)
+        const total = data.pageInfo?.totalResults
+        setTotal(total ? `~${fmtCount(total)} results (2005–2009)` : '')
+        setNextToken(data.nextPageToken ?? null)
+        setStatus('ok')
+      })
+      .catch(err => setStatus('error:' + err.message))
+  }
 
+  // Only re-fire when query or sort actually changes
   useEffect(() => {
     setPrev([]); setPage(0); setNextToken(null)
     load(null)
-  }, [query, sort, load])
+  }, [query, sort]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function goNext() {
     if (!nextToken) return
@@ -73,9 +76,9 @@ export function SearchPage({ query, onOpen }) {
 
       {status === 'ok' && (
         <div className="pagination">
-          {page > 0    && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
+          {page > 0  && <button className="page-btn" onClick={goPrev}>◀ Prev</button>}
           <button className="page-btn active">Page {page + 1}</button>
-          {nextToken   && <button className="page-btn" onClick={goNext}>Next ▶</button>}
+          {nextToken && <button className="page-btn" onClick={goNext}>Next ▶</button>}
         </div>
       )}
     </div>
