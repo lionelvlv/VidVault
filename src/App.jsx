@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from 'react'
-import { useClock } from './hooks/useClock'
 import { Sidebar } from './components/Sidebar'
 import { HomePage } from './components/HomePage'
 import { SearchPage } from './components/SearchPage'
@@ -7,7 +6,6 @@ import { VideoPage } from './components/VideoPage'
 
 // page: 'home' | 'search' | 'video'
 export default function App() {
-  const clock = useClock()
   const [page, setPage]           = useState('home')
   const [searchQuery, setSearch]  = useState('')
   const [videoId, setVideoId]     = useState(null)
@@ -36,26 +34,6 @@ export default function App() {
 
   return (
     <div id="os-desktop">
-
-      {/* TITLEBAR */}
-      <div id="os-titlebar">
-        <div id="os-titlebar-left">
-          <span id="os-appname">📺 VidVault — The Early Web Archive</span>
-        </div>
-        <div id="os-titlebar-right">
-          <div className="os-btn">_</div>
-          <div className="os-btn">□</div>
-          <div className="os-btn os-close">✕</div>
-        </div>
-      </div>
-
-      {/* MENUBAR */}
-      <div id="os-menubar">
-        {['File','Edit','View','Favorites','Tools','Help'].map(m => (
-          <span key={m} className="menu-item">{m}</span>
-        ))}
-        <span className="menu-clock">{clock}</span>
-      </div>
 
       {/* HEADER */}
       <div id="header">
@@ -100,8 +78,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* TICKER */}
-      <div id="ticker">
+      {/* TICKER */}      <div id="ticker">
         <span id="ticker-label">ARCHIVE NEWS</span>
         <div id="ticker-scroll-wrap">
           <span id="ticker-inner">
@@ -117,7 +94,7 @@ export default function App() {
 
       {/* MAIN */}
       <div id="main">
-        <Sidebar onSearch={doSearch} />
+        <Sidebar onSearch={doSearch} onOpen={openVideo} />
         <div id="content">
           {/* All pages stay mounted — no remount = no refetch */}
           <div style={{ display: page === 'home'   ? 'block' : 'none' }}><HomePage onOpen={openVideo} /></div>
@@ -133,15 +110,6 @@ export default function App() {
             />
           </div>
         </div>
-      </div>
-
-      {/* TASKBAR */}
-      <div id="os-taskbar">
-        <div id="taskbar-start">▶ Start</div>
-        <div id="taskbar-items">
-          <div className="taskbar-item">📺 VidVault Archive</div>
-        </div>
-        <div id="taskbar-tray">{clock}</div>
       </div>
 
     </div>

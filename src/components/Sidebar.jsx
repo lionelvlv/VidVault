@@ -1,3 +1,7 @@
+import { useState } from 'react'
+import { ytSearch } from '../api'
+import { getVideoId } from '../utils'
+
 const CATS = [
   ['Viral Clips 2006',         'Viral Clips'],
   ['Music Videos 2007',        'Music Videos'],
@@ -18,7 +22,43 @@ const TAGS = [
   ['dance 2006','dance'], ['machinima 2007','machinima'], ['flash animation 2006','flash'],
 ]
 
-export function Sidebar({ onSearch }) {
+// Large pool of era-appropriate queries to draw from randomly
+const RANDOM_POOL = [
+  'funny', 'vlog', 'music video', 'viral', 'prank', 'fail', 'skateboard',
+  'flash animation', 'gaming', 'animals', 'dance', 'news', 'anime', 'comedy',
+  'sports', 'tutorial', 'review', 'trailer', 'reaction', 'parody',
+  'magic trick', 'street performance', 'talent show', 'school project',
+  'home video', 'holiday', 'concert', 'cooking', 'science experiment',
+  'dog', 'cat', 'baby', 'wedding', 'birthday', 'vacation',
+]
+
+const YEARS = ['2005', '2006', '2007', '2008', '2009']
+
+export function Sidebar({ onSearch, onOpen }) {
+  const [loading, setLoading] = useState(false)
+
+  async function loadRandom() {
+    setLoading(true)
+    try {
+      // Build a random query from pool + random year
+      const word = RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)]
+      const year = YEARS[Math.floor(Math.random() * YEARS.length)]
+      const query = `${word} ${year}`
+
+      // Random sort order too
+      const order = Math.random() > 0.5 ? 'relevance' : 'date'
+      const data = await ytSearch(query, order)
+
+      if (!data.items?.length) { setLoading(false); return }
+
+      // Pick a random result from the page (not always the first one)
+      const item = data.items[Math.floor(Math.random() * data.items.length)]
+      const id   = getVideoId(item)
+      if (id) onOpen(id, item)
+    } catch { /* silently fail */ }
+    setLoading(false)
+  }
+
   return (
     <div id="sidebar">
 
@@ -45,13 +85,10 @@ export function Sidebar({ onSearch }) {
       <div className="sidebar-box">
         <div className="sidebar-box-title">Feeling Lucky?</div>
         <div className="sidebar-box-content">
-          <div className="lucky-desc">Discover a random video from the archive.</div>
-          <button className="lucky-btn" onClick={() => {
-            const queries = ['funny 2006','vlog 2007','music video 2006','viral clip 2007',
-              'prank 2006','skateboard fail 2007','flash animation 2006','gaming 2007',
-              'animals cute 2006','dance 2007','news 2006','anime amv 2006']
-            onSearch(queries[Math.floor(Math.random() * queries.length)])
-          }}>▶ Random Video</button>
+          <div className="lucky-desc">Open a truly random video from the archive.</div>
+          <button className="lucky-btn" onClick={loadRandom} disabled={loading}>
+            {loading ? '⏳ Finding…' : '▶ Random Video'}
+          </button>
         </div>
       </div>
 
