@@ -11,7 +11,7 @@ export default function App() {
   const [page, setPage]           = useState('home')
   const [searchQuery, setSearch]  = useState('')
   const [videoId, setVideoId]     = useState(null)
-  const [videoTitle, setVTitle]   = useState('')
+  const [videoItem, setVideoItem] = useState(null)
   const [lastSearch, setLast]     = useState('')
   const inputRef = useRef(null)
 
@@ -24,9 +24,9 @@ export default function App() {
     setPage('search')
   }, [])
 
-  const openVideo = useCallback((id, title) => {
+  const openVideo = useCallback((id, item) => {
     setVideoId(id)
-    setVTitle(title)
+    setVideoItem(item)
     setPage('video')
   }, [])
 
@@ -125,8 +125,9 @@ export default function App() {
           <div style={{ display: page === 'video'  ? 'block' : 'none' }}>
             <VideoPage
               videoId={videoId}
-              title={videoTitle}
-              searchQuery={lastSearch}
+              title={videoItem?.snippet?.title}
+              snippet={videoItem?.snippet}
+              statistics={videoItem?.statistics}
               onBack={backFromVideo}
               onOpen={openVideo}
             />

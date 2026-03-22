@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { getVideoId, getThumbnailUrl, fmtDate, fmtCount, fakeTimestamp, computeStars } from '../utils'
+import { getVideoId, getThumbnailUrl, fmtDate, fmtCount, computeStars } from '../utils'
 
 function Stars({ st }) {
   const score = computeStars(st)
@@ -12,14 +12,13 @@ function Stars({ st }) {
   )
 }
 
-function Thumb({ url, title, ts, unavailable }) {
+function Thumb({ url, title, unavailable }) {
   return (
     <div className="thumb-wrap">
       {url
         ? <img src={url} alt={title} loading="lazy" onError={e => e.target.style.display='none'} />
         : <div className="thumb-placeholder"><div className="play-icon">▶</div>{title.slice(0, 28)}</div>
       }
-      <div className="thumb-timestamp">{ts}</div>
       {unavailable && <div className="unavail-overlay">VIDEO UNAVAILABLE</div>}
     </div>
   )
@@ -30,13 +29,11 @@ export function VideoCard({ item, onOpen }) {
   const sn      = item.snippet    ?? {}
   const st      = item.statistics ?? {}
   const unavail = !!item._unavailable
-  // Computed once per item identity, never changes on re-render
-  const url = useMemo(() => getThumbnailUrl(item), [id])  // eslint-disable-line react-hooks/exhaustive-deps
-  const ts  = useMemo(() => fakeTimestamp(), [id])         // eslint-disable-line react-hooks/exhaustive-deps
+  const url     = useMemo(() => getThumbnailUrl(item), [id]) // eslint-disable-line
   return (
     <div className={`video-card${unavail ? ' unavailable' : ''}`}
-         onClick={() => !unavail && id && onOpen(id, sn.title ?? '')}>
-      <Thumb url={url} title={sn.title ?? ''} ts={ts} unavailable={unavail} />
+         onClick={() => !unavail && id && onOpen(id, item)}>
+      <Thumb url={url} title={sn.title ?? ''} unavailable={unavail} />
       <div className="video-info">
         <div className="video-title">{sn.title ?? 'Untitled'}</div>
         <div className="video-date">{fmtDate(sn.publishedAt)}</div>
@@ -52,13 +49,12 @@ export function ResultRow({ item, onOpen }) {
   const st      = item.statistics ?? {}
   const unavail = !!item._unavailable
   const desc    = (sn.description ?? '').slice(0, 130)
-  const url = useMemo(() => getThumbnailUrl(item), [id])  // eslint-disable-line react-hooks/exhaustive-deps
-  const ts  = useMemo(() => fakeTimestamp(), [id])         // eslint-disable-line react-hooks/exhaustive-deps
+  const url     = useMemo(() => getThumbnailUrl(item), [id]) // eslint-disable-line
   return (
     <div className={`result-row${unavail ? ' unavailable' : ''}`}
-         onClick={() => !unavail && id && onOpen(id, sn.title ?? '')}>
+         onClick={() => !unavail && id && onOpen(id, item)}>
       <div className="result-thumb">
-        <Thumb url={url} title={sn.title ?? ''} ts={ts} unavailable={unavail} />
+        <Thumb url={url} title={sn.title ?? ''} unavailable={unavail} />
       </div>
       <div className="result-info">
         <div className="result-title">{sn.title ?? 'Untitled'}</div>
