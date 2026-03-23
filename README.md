@@ -4,7 +4,7 @@
 
 VidVault is a retro-styled YouTube archive browser that surfaces videos originally uploaded during the golden era of early YouTube (April 2005 – December 2009). The UI is deliberately styled after Windows XP-era web portals — complete with a ticker tape, nav tabs, a taskbar, and pixel-perfect early-2000s typography.
 
-![VidVault Screenshot](https://imgur.com/TzaZp0M)
+![VidVault Screenshot](https://i.imgur.com/TzaZp0M.png)
 
 ---
 
