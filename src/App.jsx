@@ -5,11 +5,12 @@ import { SearchPage } from './components/SearchPage'
 import { VideoPage } from './components/VideoPage'
 
 export default function App() {
-  const [page, setPage]           = useState('home')
-  const [searchQuery, setSearch]  = useState('')
-  const [videoId, setVideoId]     = useState(null)
-  const [videoItem, setVideoItem] = useState(null)
-  const [lastSearch, setLast]     = useState('')
+  const [page, setPage]               = useState('home')
+  const [searchQuery, setSearch]      = useState('')
+  const [videoId, setVideoId]         = useState(null)
+  const [videoItem, setVideoItem]     = useState(null)
+  const [lastSearch, setLast]         = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const inputRef  = useRef(null)
   const iframeRef = useRef(null)
 
@@ -26,17 +27,20 @@ export default function App() {
     setSearch(term)
     setLast(term)
     setPage('search')
+    setSidebarOpen(false)
   }, [])
 
   const goHome = useCallback(() => {
     stopVideo()
     setPage('home')
+    setSidebarOpen(false)
   }, [])
 
   const openVideo = useCallback((id, item) => {
     setVideoId(id)
     setVideoItem(item)
     setPage('video')
+    setSidebarOpen(false)
   }, [])
 
   function backFromVideo() {
@@ -64,7 +68,7 @@ export default function App() {
                 id="search-input"
                 ref={inputRef}
                 type="text"
-                placeholder='Search the archive… try "evolution of dance" or "numa numa"'
+                placeholder='Search the archive… try "evolution of dance"'
                 onKeyDown={e => e.key === 'Enter' && doSearch()}
               />
             </div>
@@ -105,9 +109,14 @@ export default function App() {
         </div>
       </div>
 
+      {/* MOBILE SIDEBAR TOGGLE */}
+      <button id="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)}>
+        {sidebarOpen ? '✕ Close Menu' : '☰ Browse & Tags'}
+      </button>
+
       {/* MAIN */}
       <div id="main">
-        <Sidebar onSearch={doSearch} onOpen={openVideo} />
+        <Sidebar sidebarOpen={sidebarOpen} onSearch={doSearch} onOpen={openVideo} />
         <div id="content">
           <div style={{ display: page === 'home'   ? 'block' : 'none' }}><HomePage onOpen={openVideo} /></div>
           <div style={{ display: page === 'search' ? 'block' : 'none' }}><SearchPage query={searchQuery} onOpen={openVideo} /></div>

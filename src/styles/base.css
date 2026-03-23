@@ -194,3 +194,88 @@ html, body, #root {
 }
 
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+/* ============================================================
+   MOBILE / RESPONSIVE  (max-width: 640px)
+   ============================================================ */
+@media (max-width: 640px) {
+
+  /* Allow the page to scroll naturally on mobile */
+  html, body, #root {
+    height: auto;
+    overflow: auto;
+  }
+
+  #os-desktop {
+    height: auto;
+    min-height: 100dvh;
+    max-width: 100%;
+    border: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  /* Hide XP chrome on tiny screens — saves vertical space */
+  #os-titlebar,
+  #os-menubar,
+  #os-taskbar { display: none; }
+
+  /* Stack logo + search vertically */
+  #header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  #logo { font-size: 20px; }
+  #logo-tagline { font-size: 9px; }
+
+  #search-bar { flex-direction: row; }
+  #search-inner { height: 32px; }
+  #search-input { font-size: 13px; }
+  #search-btn { height: 32px; padding: 0 12px; font-size: 12px; }
+
+  /* Nav tabs: horizontal scroll, no wrapping */
+  #nav-bar {
+    padding: 4px 6px 0;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  #nav-bar::-webkit-scrollbar { display: none; }
+
+  .nav-tab {
+    font-size: 10px;
+    padding: 4px 8px 3px;
+    flex-shrink: 0;
+  }
+
+  /* Ticker stays, but slightly taller for legibility */
+  #ticker { height: 20px; }
+  #ticker-inner { font-size: 11px; }
+
+  /* Hamburger button — shown only on mobile */
+  #sidebar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: var(--teal-dark);
+    color: rgba(255,255,255,0.85);
+    font-size: 11px;
+    font-family: var(--font-header);
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    border-bottom: 1px solid var(--teal);
+  }
+  #sidebar-toggle:hover { background: var(--teal); }
+}
+
+/* Hamburger hidden by default on desktop */
+#sidebar-toggle { display: none; }

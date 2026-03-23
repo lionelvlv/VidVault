@@ -44,7 +44,7 @@ async function getWordPool() {
   }
 }
 
-export function Sidebar({ onSearch, onOpen }) {
+export function Sidebar({ onSearch, onOpen, sidebarOpen }) {
   const [loading, setLoading] = useState(false)
   const seenIds   = useRef(new Set())
 
@@ -75,7 +75,7 @@ export function Sidebar({ onSearch, onOpen }) {
   }
 
   return (
-    <div id="sidebar">
+    <div id="sidebar" className={sidebarOpen ? "sidebar-open" : ""}>
 
       <div className="sidebar-box">
         <div className="sidebar-box-title">Browse Archive</div>
