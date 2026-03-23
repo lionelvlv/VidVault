@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { HomePage } from './components/HomePage'
 import { SearchPage } from './components/SearchPage'
 import { VideoPage } from './components/VideoPage'
+import { useRandomVideo } from './hooks/useRandomVideo'
 
 export default function App() {
   const [page, setPage]               = useState('home')
@@ -14,7 +15,6 @@ export default function App() {
   const inputRef  = useRef(null)
   const iframeRef = useRef(null)
 
-  // Stop the iframe from playing when navigating away
   function stopVideo() {
     if (iframeRef.current) iframeRef.current.src = ''
   }
@@ -47,6 +47,9 @@ export default function App() {
     stopVideo()
     setPage(lastSearch ? 'search' : 'home')
   }
+
+  // Shared random-video logic — used by Sidebar AND the mobile toolbar button
+  const { loading: randLoading, loadRandom } = useRandomVideo(openVideo)
 
   return (
     <div id="os-desktop">
@@ -109,10 +112,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* MOBILE SIDEBAR TOGGLE */}
-      <button id="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)}>
-        {sidebarOpen ? '✕ Close Menu' : '☰ Browse & Tags'}
-      </button>
+      {/* MOBILE TOOLBAR — hamburger + random button side by side */}
+      <div id="mobile-toolbar">
+        <button id="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)}>
+          {sidebarOpen ? '✕ Close Menu' : '☰ Browse & Tags'}
+        </button>
+        <button id="mobile-random-btn" onClick={loadRandom} disabled={randLoading}>
+          {randLoading ? '⏳' : '🎲 Random'}
+        </button>
+      </div>
 
       {/* MAIN */}
       <div id="main">

@@ -258,24 +258,54 @@ html, body, #root {
   #ticker { height: 20px; }
   #ticker-inner { font-size: 11px; }
 
-  /* Hamburger button — shown only on mobile */
+  /* Mobile toolbar: hamburger + random button side by side */
+  #mobile-toolbar {
+    display: flex;
+    border-bottom: 1px solid var(--teal);
+  }
+
   #sidebar-toggle {
     display: flex;
     align-items: center;
     gap: 5px;
-    padding: 5px 10px;
+    padding: 7px 10px;
     background: var(--teal-dark);
     color: rgba(255,255,255,0.85);
     font-size: 11px;
     font-family: var(--font-header);
     font-weight: bold;
     border: none;
+    border-right: 1px solid var(--teal);
     cursor: pointer;
-    width: 100%;
-    border-bottom: 1px solid var(--teal);
+    flex: 1;
   }
   #sidebar-toggle:hover { background: var(--teal); }
+
+  #mobile-random-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 7px 14px;
+    background: linear-gradient(to bottom, var(--amber-light), var(--amber));
+    color: #4a2800;
+    font-size: 11px;
+    font-family: var(--font-header);
+    font-weight: bold;
+    border: none;
+    border-left: 1px solid var(--amber-dark);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #mobile-random-btn:hover   { filter: brightness(1.07); }
+  #mobile-random-btn:active  { transform: translateY(1px); }
+  #mobile-random-btn:disabled {
+    opacity: 0.65;
+    cursor: default;
+  }
 }
 
-/* Hamburger hidden by default on desktop */
-#sidebar-toggle { display: none; }
+/* Toolbar hidden by default on desktop */
+#mobile-toolbar    { display: none; }
+#mobile-random-btn { display: none; }
